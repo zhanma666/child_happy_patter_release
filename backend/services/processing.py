@@ -2,7 +2,13 @@ import numpy as np
 from typing import Tuple, Optional
 import warnings
 from scipy import signal
+import logging
+from core.exceptions import AudioProcessingError
+
 warnings.filterwarnings('ignore', category=DeprecationWarning)
+
+# 设置日志
+logger = logging.getLogger(__name__)
 
 
 class AudioProcessingService:
@@ -25,22 +31,36 @@ class AudioProcessingService:
         Returns:
             归一化后的音频数据
         """
-        # 计算当前音频的均方根值
-        current_rms = np.sqrt(np.mean(audio_data**2))
-        
-        if current_rms == 0:
-            return audio_data
+        try:
+            if not isinstance(audio_data, np.ndarray):
+                raise AudioProcessingError("音频数据必须是numpy数组", "INVALID_AUDIO_DATA")
             
-        # 计算增益因子
-        gain = target_rms / current_rms
-        
-        # 应用增益
-        normalized_audio = audio_data * gain
-        
-        # 确保数值在合法范围内
-        normalized_audio = np.clip(normalized_audio, -1.0, 1.0)
-        
-        return normalized_audio
+            if len(audio_data) == 0:
+                raise AudioProcessingError("音频数据为空", "EMPTY_AUDIO_DATA")
+            
+            # 计算当前音频的均方根值
+            current_rms = np.sqrt(np.mean(audio_data**2))
+            
+            if current_rms == 0:
+                logger.warning("音频数据是静默的，无法归一化")
+                return audio_data
+                
+            # 计算增益因子
+            gain = target_rms / current_rms
+            
+            # 应用增益
+            normalized_audio = audio_data * gain
+            
+            # 确保数值在合法范围内
+            normalized_audio = np.clip(normalized_audio, -1.0, 1.0)
+            
+            return normalized_audio
+            
+        except AudioProcessingError:
+            raise
+        except Exception as e:
+            logger.error(f"音频归一化失败: {e}")
+            raise AudioProcessingError("音频归一化处理失败", "AUDIO_NORMALIZATION_FAILED")
     
     def remove_silence(self, audio_data: np.ndarray, sample_rate: int, 
                       silence_threshold: float = 0.01, 
